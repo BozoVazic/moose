@@ -24,11 +24,12 @@ public:
 
 protected:
   /**
-   * If _porosity[_qp] < porosity_min, set _porosity[_qp] = porosity_min and multiply the
+   * If _porosity[_qp] < the porosity floor, set _porosity[_qp] to the floor and multiply the
    * derivatives of porosity by _zero_modifier (the derivative material properties for non-AD
-   * objects, and the AD derivatives for AD objects).  Otherwise do nothing.  Derived classes call
-   * this at the end of computeQpProperties(), after the unfloored porosity and its derivatives have
-   * been computed.
+   * objects, and the AD derivatives for AD objects).  Otherwise do nothing.  The floor is
+   * porosity_min_var where that is coupled and non-negative, and porosity_min elsewhere.  Derived
+   * classes call this at the end of computeQpProperties(), after the unfloored porosity and its
+   * derivatives have been computed.
    */
   void applyPorosityMin();
 
@@ -43,6 +44,9 @@ protected:
 
   /// Minimum allowed porosity (default zero, so porosity is never negative)
   const Real _porosity_min;
+
+  /// Optional spatially varying floor that replaces _porosity_min wherever it is non-negative
+  const VariableValue & _porosity_min_var;
 
   /// When the porosity_min floor is active, the porosity derivatives are multiplied by this
   const Real _zero_modifier;

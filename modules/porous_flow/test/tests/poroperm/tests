@@ -257,6 +257,14 @@
     issues = '#33944'
     design = 'porous_flow/porosity.md PorousFlowPorosityConst.md'
   []
+  [porosity_min_var]
+    type = CSVDiff
+    input = porosity_min_var.i
+    csvdiff = 'porosity_min_var_out.csv'
+    requirement = 'The system shall apply a spatially varying lower bound on porosity, given by a variable, in place of the scalar lower bound wherever that variable is non-negative.'
+    issues = '#33944'
+    design = 'porous_flow/porosity.md PorousFlowPorosityConst.md'
+  []
   [exponential_porosity_min]
     type = CSVDiff
     input = exponential_porosity_check.i

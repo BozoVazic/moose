@@ -22,6 +22,15 @@ PorousFlowPorosityBaseTempl<is_ad>::validParams()
       "porosity is set to this value instead.  The default of zero means porosity is never "
       "negative.  A negative value may be used, for instance, when comparing with analytical "
       "solutions of linear poroelasticity in which porosity can become negative");
+  params.addCoupledVar(
+      "porosity_min_var",
+      -1.0,
+      "Spatially varying minimum porosity.  Where this evaluates to a non-negative value it is "
+      "used instead of porosity_min, and where it is negative porosity_min is used.  The default "
+      "of -1 therefore leaves porosity_min in force everywhere.  This lets one Material on one "
+      "block apply a different floor near a feature, for example a floor equal to a proppant "
+      "grain diameter within some distance of a well.  This must be a real number or a constant "
+      "monomial variable (not a linear lagrange or other type of variable)");
   params.addRangeCheckedParam<Real>(
       "zero_modifier",
       1E-3,
@@ -49,6 +58,7 @@ PorousFlowPorosityBaseTempl<is_ad>::PorousFlowPorosityBaseTempl(const InputParam
             ? &declareProperty<std::vector<RealGradient>>("dPorousFlow_porosity_nodal_dgradvar")
             : &declareProperty<std::vector<RealGradient>>("dPorousFlow_porosity_qp_dgradvar")),
     _porosity_min(getParam<Real>("porosity_min")),
+    _porosity_min_var(coupledValue("porosity_min_var")),
     _zero_modifier(getParam<Real>("zero_modifier"))
 {
 }
@@ -57,12 +67,13 @@ template <bool is_ad>
 void
 PorousFlowPorosityBaseTempl<is_ad>::applyPorosityMin()
 {
-  if (MetaPhysicL::raw_value(_porosity[_qp]) >= _porosity_min)
+  const Real porosity_min = _porosity_min_var[_qp] >= 0.0 ? _porosity_min_var[_qp] : _porosity_min;
+  if (MetaPhysicL::raw_value(_porosity[_qp]) >= porosity_min)
     return;
 
   if constexpr (!is_ad)
   {
-    _porosity[_qp] = _porosity_min;
+    _porosity[_qp] = porosity_min;
     for (unsigned int v = 0; v < _num_var; ++v)
     {
       (*_dporosity_dvar)[_qp][v] *= _zero_modifier;
@@ -73,8 +84,8 @@ PorousFlowPorosityBaseTempl<is_ad>::applyPorosityMin()
   {
     // The AD path carries its derivatives inside the value and has no derivative material
     // properties, so the value and the derivatives are softened separately.  Assigning
-    // _porosity_min to the ADReal would instead discard the derivatives entirely.
-    _porosity[_qp].value() = _porosity_min;
+    // porosity_min to the ADReal would instead discard the derivatives entirely.
+    _porosity[_qp].value() = porosity_min;
     _porosity[_qp].derivatives() *= _zero_modifier;
   }
 }
