@@ -72,7 +72,7 @@ public:
     std::string name;
     /// The type of the stored variable
     libMesh::FEType type;
-    /// The size of this variable's data
+    /// The size of this variable's data (not stored; recomputed from the offsets on load)
     std::size_t size = 0;
     /// The underlying variable (only valid during store, not used in load)
     const libMesh::Variable * variable = nullptr;
@@ -162,12 +162,17 @@ private:
   /// Internal method for ordering the DofObjects by ID (elems and the nodes)
   std::vector<const libMesh::DofObject *> orderDofObjects() const;
 
+  /// The size in bytes of the data of variable \p var of system \p sys on \p ordered_objects
+  std::size_t variableSize(const libMesh::System & sys,
+                           const libMesh::Variable & var,
+                           const std::vector<const libMesh::DofObject *> & ordered_objects) const;
+
   /**
    * Whether a stored variable can be restored into a variable of type \p to_type.  The types
-   * must match except for the p_refinement flag: whether a variable may be p-refined does not
-   * change its stored degrees of freedom, and MOOSE changed the default value of the flag (on
-   * for every family before, now off for continuous non-hierarchic families), so checkpoints
-   * written before that change would otherwise silently not be restored.
+   * must match except for the p_refinement flag, because MOOSE changed the default value of the
+   * flag (on for every family before, now off for continuous non-hierarchic families) and
+   * checkpoints written before that change would otherwise silently not be restored.  The flag
+   * changes the stored degrees of freedom only on p-refined elements; restore() checks the size.
    */
   static bool restorableType(const libMesh::FEType & from_type, const libMesh::FEType & to_type);
 

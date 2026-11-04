@@ -33,4 +33,14 @@
       detail = 'and restoring it into the same variable with the default p_refinement.'
     []
   []
+
+  [p_refinement_size_mismatch]
+    type = RunException
+    input = 'restarted_steady.i'
+    cli_args = 'Variables/u/p_refinement=false'
+    expect_err = 'The stored variable has \d+ local degrees of freedom but the variable to restore has \d+'
+    prereq = 'steady_solve'
+    requirement = 'The system shall report an error when restoring a variable from a p-refined checkpoint into the same variable without p-refinement, because the stored degrees of freedom do not match.'
+    issues = '#30048'
+  []
 []

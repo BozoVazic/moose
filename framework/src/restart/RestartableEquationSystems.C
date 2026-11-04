@@ -47,26 +47,12 @@ RestartableEquationSystems::buildHeader(
       VariableHeader var_header;
       var_header.name = var.name();
       var_header.type = var.type();
-      var_header.size = 0;
+      var_header.size = variableSize(sys, var, ordered_objects);
       var_header.variable = &var;
 
       mooseAssert(_es.comm().verify("sys_" + sys.name() + "_var_" + var.name()),
                   "Out of order in parallel");
       mooseAssert(!sys_header.variables.count(var.name()), "Already inserted");
-
-      // Non-SCALAR variable
-      if (var.type().family != SCALAR)
-      {
-        for (const auto & obj : ordered_objects)
-          var_header.size += sizeof(Real) * obj->n_comp(sys.number(), var.number());
-      }
-      // SCALAR variable on the last rank
-      else if (_es.processor_id() == _es.n_processors() - 1)
-      {
-        std::vector<dof_id_type> scalar_dofs;
-        sys.get_dof_map().SCALAR_dof_indices(scalar_dofs, var.number());
-        var_header.size += sizeof(Real) * scalar_dofs.size();
-      }
 
       sys_header.variables.emplace(var.name(), var_header);
     }
@@ -115,6 +101,31 @@ RestartableEquationSystems::buildHeader(
   es_header.data_size = offset;
 
   return es_header;
+}
+
+std::size_t
+RestartableEquationSystems::variableSize(
+    const libMesh::System & sys,
+    const libMesh::Variable & var,
+    const std::vector<const libMesh::DofObject *> & ordered_objects) const
+{
+  std::size_t size = 0;
+
+  // Non-SCALAR variable
+  if (var.type().family != SCALAR)
+  {
+    for (const auto & obj : ordered_objects)
+      size += sizeof(Real) * obj->n_comp(sys.number(), var.number());
+  }
+  // SCALAR variable on the last rank
+  else if (_es.processor_id() == _es.n_processors() - 1)
+  {
+    std::vector<dof_id_type> scalar_dofs;
+    sys.get_dof_map().SCALAR_dof_indices(scalar_dofs, var.number());
+    size += sizeof(Real) * scalar_dofs.size();
+  }
+
+  return size;
 }
 
 std::vector<const libMesh::DofObject *>
@@ -227,6 +238,20 @@ RestartableEquationSystems::load(std::istream & stream)
   // on what to put where based on everything that is available
   _loaded_header.systems.clear();
   dataLoad(stream, _loaded_header, nullptr);
+
+  // The variable sizes are not stored. The data are contiguous in the order that buildHeader()
+  // assigns the offsets, so each size is the distance to the next offset in that order.
+  {
+    std::vector<std::pair<RestartableEquationSystems::VariableHeader *, std::size_t>> offsets;
+    for (auto & [_, sys_header] : _loaded_header.systems)
+      for (const auto & [__, vec_header] : sys_header.vectors)
+        for (auto & [var_name, var_header] : sys_header.variables)
+          offsets.emplace_back(&var_header, libmesh_map_find(vec_header.variable_offset, var_name));
+    for (const auto i : index_range(offsets))
+      offsets[i].first->size =
+          (i + 1 < offsets.size() ? offsets[i + 1].second : _loaded_header.data_size) -
+          offsets[i].second;
+  }
 
   // Order objects (elements and then node) by ID for storing
   _loaded_ordered_objects = orderDofObjects();
@@ -381,6 +406,20 @@ RestartableEquationSystems::restore(const SystemHeader & from_sys_header,
 
   if (!restorableType(from_var_header.type, to_var.type()))
     error("Cannot restore to a variable of a different type");
+
+  // A variable stored with a different p_refinement flag has the same degrees of freedom unless
+  // the stored or the current mesh has p-refined elements that only one of the two follows
+  const auto to_size = variableSize(to_sys, to_var, _loaded_ordered_objects);
+  if (to_size != from_var_header.size)
+    error("The stored variable has ",
+          from_var_header.size / sizeof(Real),
+          " local degrees of freedom but the variable to restore has ",
+          to_size / sizeof(Real),
+          ".\nThe variables differ in p_refinement (stored: ",
+          from_var_header.type.p_refinement,
+          ", current: ",
+          to_var.type().p_refinement,
+          ") and the mesh has p-refined elements.");
 
   const auto offset = from_vec_header.variable_offset.at(from_var_header.name);
   stream.seekg(_loaded_stream_data_begin + offset);
