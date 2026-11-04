@@ -162,6 +162,15 @@ private:
   /// Internal method for ordering the DofObjects by ID (elems and the nodes)
   std::vector<const libMesh::DofObject *> orderDofObjects() const;
 
+  /**
+   * Whether a stored variable can be restored into a variable of type \p to_type.  The types
+   * must match except for the p_refinement flag: whether a variable may be p-refined does not
+   * change its stored degrees of freedom, and MOOSE changed the default value of the flag (on
+   * for every family before, now off for continuous non-hierarchic families), so checkpoints
+   * written before that change would otherwise silently not be restored.
+   */
+  static bool restorableType(const libMesh::FEType & from_type, const libMesh::FEType & to_type);
+
   void restore(const SystemHeader & from_sys_header,
                const VectorHeader & from_vec_header,
                const VariableHeader & from_var_header,

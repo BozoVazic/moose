@@ -296,7 +296,7 @@ RestartableEquationSystems::load(std::istream & stream)
         if (!sys.has_variable(var_header.name))
           continue;
         const auto & var = sys.variable(sys.variable_number(var_header.name));
-        if (var.type() != var_header.type)
+        if (!restorableType(var_header.type, var.type()))
           continue;
 
         restore(sys_header, vec_header, var_header, sys, vec, var, stream);
@@ -325,6 +325,15 @@ RestartableEquationSystems::isVariableRestored(const std::string & system_name,
 {
   std::tuple<std::string, std::string, std::string> key(system_name, vector_name, variable_name);
   return _loaded_variables.count(key);
+}
+
+bool
+RestartableEquationSystems::restorableType(const libMesh::FEType & from_type,
+                                           const libMesh::FEType & to_type)
+{
+  auto from = from_type;
+  from.p_refinement = to_type.p_refinement;
+  return from == to_type;
 }
 
 void
@@ -370,7 +379,7 @@ RestartableEquationSystems::restore(const SystemHeader & from_sys_header,
                to_var.name());
   };
 
-  if (from_var_header.type != to_var.type())
+  if (!restorableType(from_var_header.type, to_var.type()))
     error("Cannot restore to a variable of a different type");
 
   const auto offset = from_vec_header.variable_offset.at(from_var_header.name);

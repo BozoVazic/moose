@@ -16,4 +16,21 @@
     requirement = 'The system shall support restarting a steady state solve from a steady solution with p-refinement.'
     issues = '#30048'
   []
+
+  [p_refinement_flag_mismatch]
+    requirement = 'The system shall restore a variable from a checkpoint in which the same variable was stored with a different p_refinement flag'
+    issues = '#30048'
+    [write]
+      type = RunApp
+      input = 'lagrange_p_refinement_true.i'
+      detail = 'by writing a checkpoint of a LAGRANGE variable with p_refinement = true'
+    []
+    [restore]
+      type = CSVDiff
+      input = 'restart_lagrange_default.i'
+      csvdiff = 'restart_lagrange_default_out.csv'
+      prereq = 'p_refinement_flag_mismatch/write'
+      detail = 'and restoring it into the same variable with the default p_refinement.'
+    []
+  []
 []
